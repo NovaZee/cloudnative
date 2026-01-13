@@ -824,10 +824,6 @@ cp /etc/cni/net.d/05-cilium.conflist /tmp/
 tail -100 /var/run/cilium/cilium-cni.log > /tmp/cni-log.txt
 ```
 
----
-
-**文档维护**: 请根据实际环境更新路径和配置
-
 **相关文档**:
 - [Cilium 官方文档](https://docs.cilium.io/)
 - [CNI 规范](https://github.com/containernetworking/cni)
