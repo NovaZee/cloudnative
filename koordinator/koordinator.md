@@ -1,5 +1,6 @@
 # Koordinator QoS 使用指南
 
+https://koordinator.sh/zh-Hans/docs
 ## 概述
 
 Koordinator 是由阿里云开源的 Kubernetes 资源调度和 QoS 系统，旨在在 Kubernetes 集群中高效混部微服务、AI 和大数据等工作负载。它通过弹性资源配额、Pod 紧凑调度、资源超卖和容器资源隔离等方式，实现高资源利用率，同时保证工作负载的性能稳定性。Koordinator 支持灵活的调度策略、资源超卖和 QoS 机制，已在生产环境中大规模验证。
