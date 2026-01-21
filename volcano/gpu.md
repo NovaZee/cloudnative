@@ -1,4 +1,4 @@
-# Volcano GPU 资源管理完全指南
+# Volcano GPU 资源管理
 
 > 作者：Cloud Native Team
 > 更新时间：2025-01-20

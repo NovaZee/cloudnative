@@ -1,6 +1,5 @@
-# Koordinator CPU 绑核完全指南
+# Koordinator CPU 绑核
 
-> 作者：Cloud Native Team
 > 更新时间：2025-01-20
 
 ---

@@ -1,4 +1,4 @@
-# Cilium 固定 PodIP 功能指南
+# Cilium 固定 PodIP 
 
 ## 目录
 
