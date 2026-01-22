@@ -1,0 +1,56 @@
+# ====================================================================
+# Media Scheduler ConfigMap - Standalone
+# ====================================================================
+# Quick deployment command:
+#   kubectl apply -f configmap-only.yaml
+# ====================================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: media-scheduler-overcommit
+  namespace: kube-system
+  labels:
+    app: media-scheduler
+    component: overcommit-config
+data:
+  # Overcommit configuration for extended resources
+  # Ratio format: 1.0 = no overcommit, 1.5 = 150%, 2.0 = 200%
+  overcommit-ratios: |
+    {
+      "ratios": [
+        {"resourceName": "cloudnative.example.com/gpu", "ratio": 1.5},
+        {"resourceName": "cloudnative.example.com/bandwidth", "ratio": 2.0},
+        {"resourceName": "cloudnative.example.com/encoder", "ratio": 1.2},
+        {"resourceName": "cloudnative.example.com/decoder", "ratio": 1.5}
+      ],
+      "nodeResources": {
+        "150-71": {
+          "nodeName": "150-71",
+          "allocated": {
+            "cloudnative.example.com/gpu": "0",
+            "cloudnative.example.com/bandwidth": "0",
+            "cloudnative.example.com/encoder": "0",
+            "cloudnative.example.com/decoder": "0"
+          }
+        },
+        "150-72": {
+          "nodeName": "150-72",
+          "allocated": {
+            "cloudnative.example.com/gpu": "0",
+            "cloudnative.example.com/bandwidth": "0",
+            "cloudnative.example.com/encoder": "0",
+            "cloudnative.example.com/decoder": "0"
+          }
+        },
+        "150-73": {
+          "nodeName": "150-73",
+          "allocated": {
+            "cloudnative.example.com/gpu": "0",
+            "cloudnative.example.com/bandwidth": "0",
+            "cloudnative.example.com/encoder": "0",
+            "cloudnative.example.com/decoder": "0"
+          }
+        }
+      }
+    }

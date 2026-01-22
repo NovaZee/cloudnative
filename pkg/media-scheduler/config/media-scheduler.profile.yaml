@@ -1,0 +1,38 @@
+# ====================================================================
+# Media Scheduler Profile Configuration
+# ====================================================================
+# Kubernetes v1.28+ compatible configuration
+# Reference: https://kubernetes.io/docs/concepts/scheduling-eviction/scheduling-framework/
+#
+# Features:
+#   - OvercommitFilter: Enabled for resource oversubscription
+#   - RoomAffinity: Disabled (commented out)
+# ====================================================================
+
+apiVersion: kubescheduler.config.k8s.io/v1
+kind: KubeSchedulerConfiguration
+clientConnection:
+  kubeconfig: /etc/kubernetes/scheduler.conf
+  qps: 50
+  burst: 100
+
+leaderElection:
+  leaderElect: true
+  leaseDuration: 15s
+  renewDeadline: 10s
+  retryPeriod: 2s
+  resourceLock: leases
+  resourceNamespace: kube-system
+  resourceName: media-scheduler
+
+profiles:
+  - schedulerName: media-scheduler
+    plugins:
+      filter:
+        enabled:
+          - name: OvercommitFilter
+    pluginConfig:
+      - name: OvercommitFilter
+        args:
+          configMapNamespace: kube-system
+          configMapName: media-scheduler-overcommit

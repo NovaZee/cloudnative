@@ -1,0 +1,96 @@
+# ConfigMap for media-scheduler overcommit configuration.
+# This ConfigMap stores oversubscription ratios and per-node resource allocations.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: media-scheduler-overcommit
+  namespace: kube-system
+data:
+  # overcommit-ratios contains the JSON configuration for resource oversubscription.
+  # - ratios: defines overcommit ratios for each resource type.
+  #   A ratio of 1.5 means 150% of the resource can be allocated.
+  # - nodeResources: tracks allocated resources per node.
+  overcommit-ratios: |
+    {
+      "ratios": [
+        {
+          "resourceName": "cloudnative.example.com/gpu",
+          "ratio": 1.5
+        },
+        {
+          "resourceName": "cloudnative.example.com/bandwidth",
+          "ratio": 2.0
+        },
+        {
+          "resourceName": "cloudnative.example.com/encoder",
+          "ratio": 1.2
+        }
+      ],
+      "nodeResources": {
+        "node-1": {
+          "nodeName": "node-1",
+          "allocated": {
+            "cloudnative.example.com/gpu": "2",
+            "cloudnative.example.com/bandwidth": "500M"
+          }
+        },
+        "node-2": {
+          "nodeName": "node-2",
+          "allocated": {
+            "cloudnative.example.com/gpu": "1",
+            "cloudnative.example.com/bandwidth": "300M"
+          }
+        }
+      }
+    }
+
+---
+# Example Node with room label for affinity scheduling.
+# Nodes should be labeled with their room ID for pod-to-room affinity.
+apiVersion: v1
+kind: Node
+metadata:
+  name: node-1
+  labels:
+    # media.scheduler/room-id identifies which room this node belongs to.
+    media.scheduler/room-id: "room-a"
+    # Extended resources available on this node.
+    cloudnative.example.com/gpu: "4"
+    cloudnative.example.com/bandwidth: "10G"
+    cloudnative.example.com/encoder: "2"
+
+---
+# Another node in a different room.
+apiVersion: v1
+kind: Node
+metadata:
+  name: node-2
+  labels:
+    media.scheduler/room-id: "room-b"
+    cloudnative.example.com/gpu: "4"
+    cloudnative.example.com/bandwidth: "10G"
+    cloudnative.example.com/encoder: "2"
+
+---
+# Example Pod with room affinity and extended resource requests.
+# This pod will prefer nodes labeled with room-a due to room affinity.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: media-workload-pod
+  labels:
+    # media.scheduler/room specifies which room this pod prefers.
+    # The scheduler will give higher scores to nodes with matching room-id label.
+    media.scheduler/room: "room-a"
+spec:
+  containers:
+  - name: media-encoder
+    image: cloudnative.example.com/media-encoder:latest
+    resources:
+      requests:
+        # Extended resources with overcommit support.
+        cloudnative.example.com/gpu: "1"
+        cloudnative.example.com/bandwidth: "500M"
+      limits:
+        cloudnative.example.com/gpu: "1"
+        cloudnative.example.com/bandwidth: "1G"

@@ -1,0 +1,1 @@
+# 每个work节点的daemonset pod,自动探测,当前节点资源

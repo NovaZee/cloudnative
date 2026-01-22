@@ -1,0 +1,254 @@
+# ====================================================================
+# Media Scheduler Complete Manifests
+# ====================================================================
+# This file contains all manifests for deploying and using media-scheduler.
+#
+# 1. ConfigMap: Stores overcommit configuration and resource allocation
+# 2. Node Labels: Example commands for labeling nodes
+# 3. Example Pods: Sample workloads with room affinity
+# ====================================================================
+
+---
+# ====================================================================
+# 1. ConfigMap for Media Scheduler Overcommit Configuration
+# ====================================================================
+# This ConfigMap stores:
+# - ratios: Oversubscription ratios for each resource type
+# - nodeResources: Tracks allocated resources per node
+# ====================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: media-scheduler-overcommit
+  namespace: kube-system
+  labels:
+    app: media-scheduler
+    component: overcommit-config
+data:
+  # JSON configuration for resource oversubscription
+  # Modify 'ratio' to change overcommit factor (1.0 = no overcommit)
+  overcommit-ratios: |
+    {
+      "ratios": [
+        {
+          "resourceName": "cloudnative.example.com/gpu",
+          "ratio": 1.5,
+          "description": "GPU overcommit: 1.5x allocation supported"
+        },
+        {
+          "resourceName": "cloudnative.example.com/bandwidth",
+          "ratio": 2.0,
+          "description": "Bandwidth overcommit: 2x allocation supported"
+        },
+        {
+          "resourceName": "cloudnative.example.com/encoder",
+          "ratio": 1.2,
+          "description": "Encoder overcommit: 1.2x allocation supported"
+        },
+        {
+          "resourceName": "cloudnative.example.com/decoder",
+          "ratio": 1.5,
+          "description": "Decoder overcommit: 1.5x allocation supported"
+        }
+      ],
+      "nodeResources": {}
+    }
+
+# ====================================================================
+# Deployment Commands
+# ====================================================================
+#
+# Apply ConfigMap only:
+#   kubectl apply -f this_file.yaml
+#
+# Label nodes (run manually):
+#   See commands below in "Node Labeling" section
+#
+# Verify deployment:
+#   kubectl get cm media-scheduler-overcommit -n kube-system
+#   kubectl describe cm media-scheduler-overcommit -n kube-system
+#
+# ====================================================================
+
+---
+# ====================================================================
+# 2. Node Labeling Guide
+# ====================================================================
+# Nodes need labels for:
+#   a) Room affinity (media.scheduler/room-id)
+#   b) Extended resources (e.g., cloudnative.example.com/gpu)
+#
+# Commands to label nodes (run these manually):
+# ====================================================================
+
+# Label node-1 with room-a and extended resources
+# kubectl label node node-1 media.scheduler/room-id=room-a
+# kubectl label node node-1 cloudnative.example.com/gpu=4
+# kubectl label node node-1 cloudnative.example.com/bandwidth=10G
+# kubectl label node node-1 cloudnative.example.com/encoder=2
+# kubectl label node node-1 cloudnative.example.com/decoder=2
+
+# Label node-2 with room-a (same room as node-1)
+# kubectl label node node-2 media.scheduler/room-id=room-a
+# kubectl label node node-2 cloudnative.example.com/gpu=4
+# kubectl label node node-2 cloudnative.example.com/bandwidth=10G
+# kubectl label node node-2 cloudnative.example.com/encoder=2
+# kubectl label node node-2 cloudnative.example.com/decoder=2
+
+# Label node-3 with room-b (different room)
+# kubectl label node node-3 media.scheduler/room-id=room-b
+# kubectl label node node-3 cloudnative.example.com/gpu=8
+# kubectl label node node-3 cloudnative.example.com/bandwidth=20G
+# kubectl label node node-3 cloudnative.example.com/encoder=4
+# kubectl label node node-3 cloudnative.example.com/decoder=4
+
+# Verify node labels:
+# kubectl get nodes --show-labels | grep media.scheduler
+
+---
+# ====================================================================
+# 3. Example Pod: Room Affinity + Extended Resources
+# ====================================================================
+# This pod demonstrates:
+# - Room affinity via label (media.scheduler/room: room-a)
+# - Extended resource requests with overcommit support
+# ====================================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: media-encoder-room-a
+  labels:
+    app: media-encoder
+    media.scheduler/room: "room-a"
+spec:
+  containers:
+  - name: encoder
+    image: cloudnative.example.com/media-encoder:latest
+    resources:
+      requests:
+        cloudnative.example.com/gpu: "1"
+        cloudnative.example.com/bandwidth: "1G"
+        cloudnative.example.com/encoder: "1"
+      limits:
+        cloudnative.example.com/gpu: "1"
+        cloudnative.example.com/bandwidth: "2G"
+        cloudnative.example.com/encoder: "1"
+    # Optional: Add node selector to force specific node
+    # nodeSelector:
+    #   media.scheduler/room-id: "room-a"
+
+---
+# ====================================================================
+# 4. Example Pod: High Resource Usage (Testing Overcommit)
+# ====================================================================
+# This pod requests more GPU than physically available,
+# testing the overcommit logic (ratio: 1.5 = 150% allocation)
+# ====================================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: media-transcoder-room-a
+  labels:
+    app: media-transcoder
+    media.scheduler/room: "room-a"
+spec:
+  containers:
+  - name: transcoder
+    image: cloudnative.example.com/transcoder:latest
+    resources:
+      requests:
+        # With 1.5x overcommit on a 4-GPU node: max 6 GPUs can be allocated
+        cloudnative.example.com/gpu: "2"
+        cloudnative.example.com/bandwidth: "3G"
+        cloudnative.example.com/encoder: "1"
+        cloudnative.example.com/decoder: "1"
+      limits:
+        cloudnative.example.com/gpu: "2"
+        cloudnative.example.com/bandwidth: "5G"
+        cloudnative.example.com/encoder: "1"
+        cloudnative.example.com/decoder: "1"
+
+---
+# ====================================================================
+# 5. Example Pod: Different Room (Anti-Affinity Test)
+# ====================================================================
+# This pod specifies room-b, demonstrating room-based isolation.
+# It will NOT be scheduled on nodes labeled with room-a.
+# ====================================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: media-processor-room-b
+  labels:
+    app: media-processor
+    media.scheduler/room: "room-b"
+spec:
+  containers:
+  - name: processor
+    image: cloudnative.example.com/processor:latest
+    resources:
+      requests:
+        cloudnative.example.com/gpu: "2"
+        cloudnative.example.com/bandwidth: "2G"
+      limits:
+        cloudnative.example.com/gpu: "2"
+        cloudnative.example.com/bandwidth: "4G"
+
+---
+# ====================================================================
+# 6. Example Deployment: Multiple Replicas with Room Affinity
+# ====================================================================
+# A Deployment demonstrating room affinity for scaled workloads.
+# All replicas will prefer nodes in room-a.
+# ====================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: media-encoder-deployment
+  labels:
+    app: media-encoder
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: media-encoder
+  template:
+    metadata:
+      labels:
+        app: media-encoder
+        media.scheduler/room: "room-a"
+    spec:
+      containers:
+      - name: encoder
+        image: cloudnative.example.com/media-encoder:latest
+        resources:
+          requests:
+            cloudnative.example.com/gpu: "1"
+            cloudnative.example.com/bandwidth: "1G"
+          limits:
+            cloudnative.example.com/gpu: "1"
+            cloudnative.example.com/bandwidth: "2G"
+
+---
+# ====================================================================
+# 7. Verification Commands
+# ====================================================================
+#
+# Check ConfigMap:
+#   kubectl get cm media-scheduler-overcommit -n kube-system -o yaml
+#
+# Check node labels:
+#   kubectl get nodes -L media.scheduler/room-id
+#   kubectl get nodes -L cloudnative.example.com/gpu
+#
+# Check pods with room labels:
+#   kubectl get pods -L media.scheduler/room
+#
+# Describe pod scheduling (check events):
+#   kubectl describe pod media-encoder-room-a
+#
+# Check resource allocation (requires metrics-server):
+#   kubectl top nodes
+#   kubectl top pods
+#
+# ====================================================================
