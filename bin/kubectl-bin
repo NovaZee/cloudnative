@@ -1,0 +1,48 @@
+touch ~/.k
+chmod +x ~/.k
+vim ~/.k
+
+------------------------------------------------------------------
+
+#!/usr/bin/env bash
+
+# ========== kubectl namespaces ==========
+alias k='kubectl'
+alias kv='kubectl -n volcano-system'
+alias ks='kubectl -n kube-system'
+alias kd='kubectl -n default'
+alias ka='kubectl get pods -A'
+
+# ========== kind ==========
+alias kc='kubectl config current-context'
+alias kctx='kubectl config get-contexts'
+alias kswitch='kubectl config use-context'
+
+alias kindls='kind get clusters'
+alias kindrm='kind delete cluster'
+alias kindallrm='kind delete clusters --all'
+
+# ========== debug ==========
+alias klog='kubectl logs'
+alias kexec='kubectl exec -it'
+alias kdesc='kubectl describe'
+
+# ========== volcano ==========
+alias vjob='kubectl get vcjob'
+alias vq='kubectl get queue -n volcano-system'
+
+# ========== helpers ==========
+function knode() {
+  docker exec -it "$1" bash
+}
+
+function kpods() {
+  kubectl get pods -o wide "$@"
+}
+
+------------------------------------------------------------------
+
+
+vim ~/.zshrc
+    source ~/.k
+source ~/.zshrc
