@@ -1,0 +1,240 @@
+# ====================================================================
+# LocalPV CSI Driver - Deploy Manifests
+# ====================================================================
+# Namespace + RBAC + ConfigMap(overprovision) + CSIDriver + DaemonSet + StorageClass
+# ====================================================================
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: default
+  labels:
+    app.kubernetes.io/name: localpv-csi
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: localpv-csi
+  namespace: default
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: localpv-csi-provisioner
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "create", "delete", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims/status"]
+    verbs: ["update", "patch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumes/status"]
+    verbs: ["update", "patch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["csinodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: localpv-csi-provisioner
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: localpv-csi-provisioner
+subjects:
+  - kind: ServiceAccount
+    name: localpv-csi
+    namespace: default
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: localpv-config-reader
+  namespace: default
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: localpv-config-reader
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: localpv-config-reader
+subjects:
+  - kind: ServiceAccount
+    name: localpv-csi
+    namespace: default
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: localpv-overprovision
+  namespace: default
+  labels:
+    app.kubernetes.io/name: localpv-csi
+data:
+  # YAML schema is defined by pkg/localpv/pkg/overprovision.Config
+  config.yaml: |
+    defaultOverprovisionRatio: 1.0
+    defaultReservedBytes: 1Gi
+    pools:
+      default:
+        overprovisionRatio: 2.0
+        reservedBytes: 5Gi
+
+---
+apiVersion: storage.k8s.io/v1
+kind: CSIDriver
+metadata:
+  name: localpv.csi.cloudnative.io
+spec:
+  attachRequired: false
+  podInfoOnMount: false
+  volumeLifecycleModes:
+    - Persistent
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: localpv-csi
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: localpv-csi
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: localpv-csi
+    spec:
+      serviceAccountName: localpv-csi
+      priorityClassName: system-node-critical
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: localpv-csi
+          image: localpv-csi:dev
+          imagePullPolicy: IfNotPresent
+          args:
+            - --endpoint=unix:///csi/csi.sock
+            - --driver-name=localpv.csi.cloudnative.io
+            - --base-dir=/var/lib/localpv
+            - --configmap-namespace=localpv-system
+            - --configmap-name=localpv-overprovision
+            - --configmap-key=config.yaml
+          env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          securityContext:
+            privileged: true
+            allowPrivilegeEscalation: true
+            runAsUser: 0
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /csi
+            - name: kubelet-dir
+              mountPath: /var/lib/kubelet
+              mountPropagation: Bidirectional
+            - name: localpv-dir
+              mountPath: /var/lib/localpv
+
+        - name: csi-provisioner
+          image: registry.k8s.io/sig-storage/csi-provisioner:v3.5.0
+          args:
+            - --csi-address=/csi/csi.sock
+            - --v=2
+            - --node-deployment=true
+            - --leader-election=false
+            - --feature-gates=Topology=true
+            - --strict-topology=true
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /csi
+
+        - name: node-driver-registrar
+          image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.8.0
+          args:
+            - --csi-address=/csi/csi.sock
+            - --kubelet-registration-path=/var/lib/kubelet/plugins/localpv.csi.cloudnative.io/csi.sock
+            - --v=2
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /csi
+            - name: registration-dir
+              mountPath: /registration
+
+        - name: liveness-probe
+          image: registry.k8s.io/sig-storage/livenessprobe:v2.10.0
+          args:
+            - --csi-address=/csi/csi.sock
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /csi
+
+      volumes:
+        - name: plugin-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/localpv.csi.cloudnative.io
+            type: DirectoryOrCreate
+        - name: registration-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry
+            type: DirectoryOrCreate
+        - name: kubelet-dir
+          hostPath:
+            path: /var/lib/kubelet
+            type: Directory
+        - name: localpv-dir
+          hostPath:
+            path: /var/lib/localpv
+            type: DirectoryOrCreate
+
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: localpv
+provisioner: localpv.csi.cloudnative.io
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+parameters:
+  localpv.csi.cloudnative.io/pool: default
