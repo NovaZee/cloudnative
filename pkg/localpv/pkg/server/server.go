@@ -28,6 +28,15 @@ func New(opts Options) (*Server, error) {
 	return &Server{endpoint: opts.Endpoint}, nil
 }
 
+// Start 本质上等价于“HTTP 路由注册” Register* 只是把 service descriptor + handler 注册进 grpc.Server
+//   - 不会主动调用你的 driver
+//   - 真正的调用发生在有客户端通过 socket 发起 gRPC 请求时
+//   - csi.RegisterIdentityServer(s.grpc, d)
+//   - 注册 Identity 这组 RPC：GetPluginInfo / GetPluginCapabilities / Probe
+//   - csi.RegisterControllerServer(s.grpc, d)
+//   - 注册 Controller 这组 RPC：CreateVolume / DeleteVolume / ...
+//   - csi.RegisterNodeServer(s.grpc, d)
+//   - 注册 Node 这组 RPC：NodeGetInfo / NodePublishVolume / NodeUnpublishVolume / ...
 func (s *Server) Start(d interface {
 	csi.IdentityServer
 	csi.ControllerServer
